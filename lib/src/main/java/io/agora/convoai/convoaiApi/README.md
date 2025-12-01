@@ -20,15 +20,35 @@
 
 ## 集成步骤
 
-1. 将以下文件和文件夹拷贝到你的 Android 项目中：
-   - [subRender/](./subRender/)（v3整个文件夹）
-   - [ConversationalAIAPIImpl.kt](ConversationalAIAPIImpl.kt)
-   - [IConversationalAIAPI.kt](IConversationalAIAPI.kt)
-   - [ConversationalAIUtils.kt](ConversationalAIUtils.kt)
+### 通过 Maven Central 依赖
 
-   > ⚠️ 请保持包名结构（`io.agora.scene.convoai.convoaiApi`）不变，以保证组件正常集成。
+本库已发布到 Maven Central，可以直接使用，**无需任何认证配置**。
 
-2. 确保你的项目已集成 Agora RTC/RTM，且 RTC 版本为 **4.5.1 及以上**。
+**在模块的 `build.gradle.kts` 中添加依赖**：
+
+```kotlin
+dependencies {
+    implementation("io.github.alienzh:convoai-api:1.0.0")
+    
+    // 需要自己添加 RTC 和 RTM 依赖（库不会传递这些依赖，方便使用不同版本）
+    implementation("io.agora.rtc:full-sdk:4.5.2")  // 使用你需要的版本
+    implementation("io.agora:agora-rtm:2.2.2")      // 使用你需要的版本
+    // 或者使用轻量级 RTM SDK（推荐，避免 libaosl.so 冲突）
+    // implementation("io.agora:agora-rtm-lite:2.2.2")
+}
+```
+
+**Maven Central 的优势**：
+- ✅ 完全公开，无需认证
+- ✅ 标准 Maven 仓库，所有项目默认就有
+- ✅ 无需额外配置仓库
+- ✅ 最权威的 Maven 仓库
+
+**查看已发布的版本**：
+- [Maven Central](https://central.sonatype.com/artifact/io.github.alienzh/convoai-api/1.0.0/overview)
+- [Maven Repository](https://repo1.maven.org/maven2/io/github/alienzh/convoai-api/)
+
+**确保你的项目已集成 Agora RTC/RTM，且 RTC 版本为 **4.5.1 及以上**。**
 
 ---
 

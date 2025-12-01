@@ -89,7 +89,7 @@ android {
 dependencies {
 //    implementation(project(":lib"))
 
-    implementation("io.alienzh.convoai:convoai-api:1.0.0")
+    implementation("io.github.alienzh:convoai-api:1.0.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

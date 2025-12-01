@@ -1,3 +1,7 @@
+import java.io.*
+import java.net.*
+import java.util.*
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -11,8 +15,14 @@ android {
 
     defaultConfig {
         minSdk = 26
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar()
+        }
     }
 
     buildTypes {
@@ -51,14 +61,38 @@ val libraryGroupId = "io.github.alienzh"
 val libraryArtifactId = "convoai-api"
 val libraryVersion = "1.0.0" // Change version here as needed
 
-// Maven Publishing Configuration
+// Get Bearer Token from gradle.properties or environment variable
+val mavenAuthorization = project.findProperty("mavenAuthorization") as String?
+    ?: System.getenv("MAVEN_AUTHORIZATION")
+    ?: ""
+
+// Get GPG signing configuration from gradle.properties or environment variables
+val signingKeyId = project.findProperty("signing.keyId") as String?
+    ?: System.getenv("GPG_KEY_ID")
+    ?: ""
+val signingPassword = project.findProperty("signing.password") as String?
+    ?: System.getenv("GPG_PASSWORD")
+    ?: ""
+val signingSecretKeyRingFile = project.findProperty("signing.secretKeyRingFile") as String?
+    ?: System.getenv("GPG_SECRET_KEY_RING_FILE")
+    ?: "secret.gpg"
+
 afterEvaluate {
     publishing {
+        repositories {
+            maven {
+                name = "LocalRepo"
+                url = uri("${rootProject.projectDir}/repo")
+            }
+        }
+        
         publications {
             create<MavenPublication>("release") {
                 groupId = libraryGroupId
                 artifactId = libraryArtifactId
                 version = libraryVersion
+                
+                // Release build variant (includes AAR, Sources JAR, Javadoc JAR if configured)
                 from(components["release"])
 
                 pom {
@@ -88,49 +122,82 @@ afterEvaluate {
                 }
             }
         }
-
-        repositories {
-            maven {
-                name = "Sonatype"
-                val releasesRepoUrl = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-                val snapshotsRepoUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-                url = uri(if (libraryVersion.endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
-                credentials {
-                    username = project.findProperty("sonatypeUsername") as String? ?: System.getenv("SONATYPE_USERNAME")
-                    password = project.findProperty("sonatypePassword") as String? ?: System.getenv("SONATYPE_PASSWORD")
+    }
+    
+    // GPG Signing Configuration (Required for Maven Central)
+    signing {
+        if (signingKeyId.isNotBlank() && signingPassword.isNotBlank()) {
+            val secretKeyFile = project.file(signingSecretKeyRingFile).takeIf { it.exists() }
+                ?: project.rootProject.file(signingSecretKeyRingFile).takeIf { it.exists() }
+            
+            if (secretKeyFile != null) {
+                val keyContent = secretKeyFile.readText()
+                val fullKeyId = signingKeyId.trim().uppercase()
+                val shortKeyId = if (fullKeyId.length > 8) fullKeyId.takeLast(8) else fullKeyId
+                
+                try {
+                    signing.useInMemoryPgpKeys(shortKeyId, keyContent, signingPassword)
+                    sign(publishing.publications["release"])
+                } catch (e: Exception) {
+                    throw GradleException("Failed to configure GPG signing: ${e.message}", e)
                 }
+            } else {
+                throw GradleException("GPG secret key file not found at: $signingSecretKeyRingFile. Maven Central requires GPG signatures.")
+            }
+        } else {
+            throw GradleException("GPG signing not configured. Maven Central requires GPG signatures for all files.")
+        }
+    }
+    
+    // Task to delete old folders
+    tasks.register("deleteFolders", Delete::class) {
+        delete("${rootProject.projectDir}/published")
+        delete("${rootProject.projectDir}/repo")
+    }
+    
+    // Task to zip the repo folder and upload to Central Portal
+    tasks.register("zipFolderAndUpload", Zip::class) {
+        from("${rootProject.projectDir}/repo")
+        archiveFileName.set("${libraryArtifactId}-${libraryVersion}.zip")
+        
+        // Exclude maven-metadata files
+        exclude("**/maven-metadata*")
+        
+        destinationDirectory.set(file("${rootProject.projectDir}/published"))
+        
+        doLast {
+            val location = "https://central.sonatype.com/api/v1/publisher/upload?name=${libraryGroupId}:${libraryArtifactId}:${libraryVersion}&publishingType=USER_MANAGED"
+            val zipFile = file("${rootProject.projectDir}/published/${libraryArtifactId}-${libraryVersion}.zip")
+            
+            if (!zipFile.exists()) {
+                throw GradleException("Zip file not found: ${zipFile.absolutePath}")
             }
             
-            maven {
-                name = "GitHubPackages"
-                url = uri("https://maven.pkg.github.com/alienzh/Agora-Conversational-AI-API")
-                credentials {
-                    username = project.findProperty("gpr.user") as String? ?: System.getenv("GITHUB_ACTOR") ?: "alienzh"
-                    password = project.findProperty("gpr.token") as String? ?: System.getenv("GITHUB_TOKEN")
-                }
+            if (mavenAuthorization.isBlank()) {
+                throw GradleException("mavenAuthorization is required. Set it in gradle.properties or MAVEN_AUTHORIZATION environment variable")
+            }
+            
+            // Use curl for upload to handle multipart/form-data correctly
+            exec {
+                commandLine(
+                    "curl",
+                    "--request", "POST",
+                    "--url", location,
+                    "--header", "Authorization: Bearer $mavenAuthorization",
+                    "--form", "bundle=@${zipFile.absolutePath}",
+                    "--verbose"
+                )
             }
         }
     }
-
-    // GPG Signing
-    signing {
-        val keyId = project.findProperty("signing.keyId") as String?
-        val password = project.findProperty("signing.password") as String?
-        val secretKeyRingFile = project.findProperty("signing.secretKeyRingFile") as String? ?: "secret.gpg"
-        
-        if (keyId != null && password != null) {
-            val secretKeyFile = project.file(secretKeyRingFile).takeIf { it.exists() }
-                ?: project.rootProject.file(secretKeyRingFile).takeIf { it.exists() }
-            
-            secretKeyFile?.let {
-                signing.useInMemoryPgpKeys(keyId, it.readText(), password)
-                sign(publishing.publications["release"])
-            }
-        }
+    
+    // Configure task dependencies
+    tasks.named("publish").configure {
+        dependsOn("deleteFolders")
+        finalizedBy("zipFolderAndUpload")
     }
 }
 
 // Publish Commands:
-// Maven Central: ./gradlew :lib:publishReleasePublicationToSonatypeRepository
-// GitHub Packages: ./gradlew :lib:publishReleasePublicationToGitHubPackagesRepository
+// Maven Central (via Central Portal): ./gradlew :lib:publish
 // Local Test: ./gradlew :lib:publishToMavenLocal
