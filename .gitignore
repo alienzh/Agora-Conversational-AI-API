@@ -25,3 +25,29 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# Environment configuration (contains sensitive credentials)
+env.properties
+local.properties
+
+# Gradle files
+.gradle/
+build/
+*.iml
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# Local configuration files (may contain sensitive info)
+# Note: lib/gradle.properties contains Maven publishing credentials and is ignored by lib/.gitignore
+# Uncomment if you add sensitive info to root gradle.properties:
+# gradle.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+/lib/secret.gpg

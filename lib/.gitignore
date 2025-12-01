@@ -1,0 +1,6 @@
+/build
+/gradle.properties.example
+/gradle.properties
+/PUBLISH.md
+/secret.gpg
+/public.asc
